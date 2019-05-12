@@ -473,7 +473,7 @@ def _get_heat_index(temp: float, rh: float):
         logging.warning("RH values changed from %s to %s" % (rh, rh * 100))
         rh *= 100
     if temp < 27 or rh < 40:
-        return None, None
+        return None, "No concerns"
     temp = (temp * 9 / 5) + 32
     c1 = -42.379
     c2 = 2.04901523
