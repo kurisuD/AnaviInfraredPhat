@@ -8,6 +8,8 @@ import sys
 from json import dumps
 from time import sleep
 
+from socket import gethostname
+
 from AnaviInfraredPhat import report_tphl_average
 from pap_logger import PaPLogger, DEBUG, INFO
 import zmq
@@ -21,10 +23,11 @@ def _run(param):
     context = zmq.Context()
     socket = context.socket(zmq.PUB)
     socket.bind("tcp://%s:%s" % ("*", param.pub_port))
+    hostname = gethostname()
     while True:
         data = dumps(report_tphl_average("localhost"))
         logging.debug(data)
-        socket.send_string(data)
+        socket.send_string("{} {}".format(hostname, data))
         sleep(param.interval)
 
 
