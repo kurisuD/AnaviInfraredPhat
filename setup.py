@@ -6,7 +6,7 @@ with open("README.md") as fh:
 
 setuptools.setup(
     name="AnaviInfraredPhat",
-    version="0.0.3",
+    version="0.0.4",
     author="KurisuD",
     author_email="KurisuD@pypi.darnand.net",
     description="AnaviInfraredPhat",

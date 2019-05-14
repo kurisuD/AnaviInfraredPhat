@@ -22,6 +22,7 @@ def _run(param):
     logging.info('Starting')
     context = zmq.Context()
     socket = context.socket(zmq.PUB)
+    socket.setsockopt(zmq.CONFLATE, 1)
     socket.bind("tcp://%s:%s" % ("*", param.pub_port))
     hostname = gethostname()
     while True:
