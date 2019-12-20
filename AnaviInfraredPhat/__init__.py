@@ -461,7 +461,7 @@ def report_tphl(host):
             raise exc
 
 
-def _get_heat_index(temp: float, rh: float):
+def get_heat_index(temp: float, rh: float):
     """
     See https://en.wikipedia.org/wiki/Heat_index#Formula
     the formula uses fahrenheit, so we convert for computation and return back in celsuis
@@ -473,7 +473,7 @@ def _get_heat_index(temp: float, rh: float):
         logging.warning("RH values changed from %s to %s" % (rh, rh * 100))
         rh *= 100
     if temp < 27 or rh < 40:
-        return None, "No concerns"
+        return None, None
     temp = (temp * 9 / 5) + 32
     c1 = -42.379
     c2 = 2.04901523
@@ -501,6 +501,9 @@ def _get_heat_index(temp: float, rh: float):
         cmt = "Extreme Danger"
     hi = ((hi - 32) * 5) / 9
 
+    if cmt:
+        logging.info("Heat index info : %s (hi=%s)" % (cmt, hi))
+
     return hi, cmt
 
 
@@ -516,7 +519,7 @@ def report_tphl_average(host):
         return {"t": -4242, "p": -4242, "h": -4242, "l": -4242, "hi": "", "hi_cmt": ""}
     else:
         avg_temp = round((values["bmp180"]["t"] + values["htu21d"]["t"]) / 2, 1)
-        hi, hi_cmt = _get_heat_index(temp=avg_temp, rh=int(values["htu21d"]["h"]))
+        hi, hi_cmt = get_heat_index(temp=avg_temp, rh=int(values["htu21d"]["h"]))
         return {"t": avg_temp,
                 "p": int(values["bmp180"]["p"]),
                 "h": int(values["htu21d"]["h"]),
@@ -538,14 +541,15 @@ def report_tphl_as_text(host):
         rtn = values
     else:
         avg_temp = round((values["bmp180"]["t"] + values["htu21d"]["t"]) / 2, 1)
-        hi, hi_cmt = _get_heat_index(temp=avg_temp, rh=int(values["htu21d"]["h"]))
+        hi, hi_cmt = get_heat_index(temp=avg_temp, rh=int(values["htu21d"]["h"]))
         rtn = "{}:\n".format(host)
         rtn += "\tTemperature\t{:.1f} C ({:.1f} / {:.1f})\n".format((values["bmp180"]["t"] + values["htu21d"]["t"]) / 2,
                                                                     values["bmp180"]["t"], values["htu21d"]["t"])
         rtn += "\tPressure\t\t{:d} hPa\n".format(int(values["bmp180"]["p"]))
         rtn += "\tHumidity\t\t{:d} %rh\n".format(int(values["htu21d"]["h"]))
         rtn += "\tLuminosity\t\t{:d} Lux".format(int(values["bh1750"]["l"]))
-        rtn += "\tHeat Index\t\t{:d} : {}".format(hi, hi_cmt)
+        if hi or hi_cmt:
+            rtn += "\tHeat Index\t\t{:d} : {}".format(hi, hi_cmt)
         rtn += "\n"
     return rtn
 
