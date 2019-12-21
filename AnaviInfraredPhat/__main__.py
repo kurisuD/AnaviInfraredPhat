@@ -1,18 +1,17 @@
 """
 Publishes temperature, pressure, humidity, luminosity and heat index from your Pi over 0MQ.
 """
-import logging
-
 import argparse
+import logging
 import sys
 from json import dumps
+from socket import gethostname
 from time import sleep
 
-from socket import gethostname
+import zmq
+from pap_logger import PaPLogger, DEBUG, INFO
 
 from AnaviInfraredPhat import report_tphl_average
-from pap_logger import PaPLogger, DEBUG, INFO
-import zmq
 
 
 def _run(param):
