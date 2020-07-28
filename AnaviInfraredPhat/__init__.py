@@ -289,19 +289,17 @@ class IRSEND(AnaviInfraredPhat):
    Records file is to be created with this script
    """
 
-    def __init__(self, pi, records_file, txgpio=17, txfreq=38.0, gap=100):
+    def __init__(self, pi, records_file=None, txgpio=17, txfreq=38.0, gap=100):
         super().__init__(pi)
         self.GPIO = txgpio
         self.FREQ = txfreq
         self.GAP_S = gap / 1000.0
         self.records_file = records_file
-        self.code = []
-        self.code2 = []
         self.h = None
 
     def carrier(self, micros):
         """
-      Generate carrier square wave.
+        Generate carrier square wave.
         :param micros:
         :return:
       """
@@ -319,7 +317,7 @@ class IRSEND(AnaviInfraredPhat):
             wf.append(pigpio.pulse(0, 1 << self.GPIO, off))
         return wf
 
-    def send_ir(self, command):
+    def send_ir_command(self, command):
         """
         :param command: command to pass to the air conditionner. Needs to match a key in the config file.
         :return:
@@ -330,41 +328,144 @@ class IRSEND(AnaviInfraredPhat):
             return "Can't open: {}".format(self.records_file)
         records = json.load(f)
         f.close()
-        self.pi.set_mode(self.GPIO, pigpio.OUTPUT)  # IR TX connected to this GPIO.
-        self.pi.wave_add_new()
-        emit_time = time.time()
         if command in records:
-            self.code = records[command]
-            # Create wave
-            marks_wid = {}
-            spaces_wid = {}
-            wave = [0] * len(self.code)
-            for i in range(0, len(self.code)):
-                ci = self.code[i]
-                if i & 1:  # Space
-                    if ci not in spaces_wid:
-                        self.pi.wave_add_generic([pigpio.pulse(0, 0, ci)])
-                        spaces_wid[ci] = self.pi.wave_create()
-                    wave[i] = spaces_wid[ci]
-                else:  # Mark
-                    if ci not in marks_wid:
-                        wf = self.carrier(ci)
-                        self.pi.wave_add_generic(wf)
-                        marks_wid[ci] = self.pi.wave_create()
-                    wave[i] = marks_wid[ci]
-            delay = emit_time - time.time()
-            if delay > 0.0:
-                time.sleep(delay)
-            self.pi.wave_chain(wave)
-            while self.pi.wave_tx_busy():
-                time.sleep(0.002)
-            for i in marks_wid:
-                self.pi.wave_delete(marks_wid[i])
-            for i in spaces_wid:
-                self.pi.wave_delete(spaces_wid[i])
+            self.send_ir_code(code=records[command])
             return "Command {} sent".format(command)
         else:
             return "Command {} not found".format(command)
+
+    def send_ir_code(self, code):
+        """
+        :param code: command to pass to the air conditionner. Needs to match a key in the config file.
+        :return:
+        """
+        # Taken from pigpio project irrp.py sample. Some modifications where made.
+        self.pi.set_mode(self.GPIO, pigpio.OUTPUT)  # IR TX connected to this GPIO.
+        self.pi.wave_clear()
+        self.pi.wave_add_new()
+        emit_time = time.time()
+
+        # Create wave
+        marks_wid = {}
+        spaces_wid = {}
+        wave = [0] * len(code)
+        for i in range(0, len(code)):
+            ci = code[i]
+            if i & 1:  # Space
+                if ci not in spaces_wid:
+                    self.pi.wave_add_generic([pigpio.pulse(0, 0, ci)])
+                    spaces_wid[ci] = self.pi.wave_create()
+                wave[i] = spaces_wid[ci]
+            else:  # Mark
+                if ci not in marks_wid:
+                    wf = self.carrier(ci)
+                    self.pi.wave_add_generic(wf)
+                    marks_wid[ci] = self.pi.wave_create()
+                wave[i] = marks_wid[ci]
+        delay = emit_time - time.time()
+        if delay > 0.0:
+            time.sleep(delay)
+
+        max_len = 598
+
+        if len(wave) > max_len:
+            logging.debug(wave)
+            logging.debug(self._compress_wave(wave))
+            wave = self._compress_wave(wave)
+
+        self.pi.wave_chain(wave)
+        while self.pi.wave_tx_busy():
+            time.sleep(0.002)
+        for i in marks_wid:
+            self.pi.wave_delete(marks_wid[i])
+        for i in spaces_wid:
+            self.pi.wave_delete(spaces_wid[i])
+        return True
+
+    def send_ir(self, command=None, code=None):
+        """
+        :param command: command to pass to the air conditionner. Needs to match a key in the config file.
+        :param code: code to send
+        :return:
+        """
+        if command:
+            return self.send_ir_command(command=command)
+        elif code:
+            return self.send_ir_code(code=code)
+        else:
+            return None
+
+    @staticmethod
+    def _compress_wave(wave, entry_max=598):
+        # Taken from https://korintje.com/archives/28. Thanks!
+        # Compressing a wave code if the length is more than entry_max ###
+        loop_max = 20
+        if len(wave) > entry_max:
+            import collections
+
+            def _make_ngram(_l, n):
+                _ngrams = list(zip(*(_l[_i:] for _i in range(n))))
+                return collections.Counter(_ngrams).most_common()
+
+            def _depth_of_tuple(t):
+                if isinstance(t, tuple):
+                    if t == tuple():
+                        return 1
+                    return 1 + max(_depth_of_tuple(_item) for _item in t)
+                else:
+                    return 0
+
+            def _nonloop_decode(_wave, _i, t):
+                _wave[_i:_i + 1] = [t[num] for num in range(len(t) - 1)] * t[-1]
+                return wave
+
+            def _loop_decode(_wave, _i, t):
+                repeat_unit = [t[num] for num in range(len(t) - 1)]
+                code = [255, 0, 255, 1, t[-1], 0]
+                code[2:2] = repeat_unit
+                _wave[_i:_i + 1] = code
+                return _wave
+
+            # encoding the original wave to the tuple code
+            for wl in range(2, len(wave) // 2):
+                pre_len = 0
+                while len(wave) != pre_len:
+                    pre_len = len(wave)
+                    ngrams = _make_ngram(wave, wl)
+                    for ngram in ngrams:
+                        ngram_wave = ngram[0]
+                        ngram_freq = ngram[1]
+                        if ngram_freq >= 2:
+                            for i in range(len(wave) - len(ngram_wave)):
+                                if tuple(wave[i:i + wl]) == ngram_wave:
+                                    for rn in range(2, ngram_freq):
+                                        if wave[i:i + (wl * rn)] != list(ngram_wave * rn):
+                                            if wl * (rn - 2) > 6 or _depth_of_tuple(ngram_wave) >= 2 and rn - 1 >= 2:
+                                                loop_code = list(ngram_wave) + [rn - 1]
+                                                wave[i:i + ((rn - 1) * wl)] = [tuple(loop_code)]
+                                            break
+
+            # decoding the tuple-type code into the wave code
+            rest_loop_count = loop_max
+            for d in range(_depth_of_tuple(tuple(wave))):
+                for i, item in enumerate(wave):
+                    if isinstance(item, tuple):
+                        if rest_loop_count <= 0:
+                            _nonloop_decode(wave, i, item)
+                        elif _depth_of_tuple(item) > 1:
+                            _loop_decode(wave, i, item)
+                            rest_loop_count -= 1
+            efficiencies = sorted(set([(len(item) - 1) * (item[-1] - 1) for item in wave if isinstance(item, tuple)]),
+                                  reverse=True)
+            for eff in efficiencies:
+                for i, item in enumerate(wave):
+                    if isinstance(item, tuple):
+                        if rest_loop_count <= 0:
+                            _nonloop_decode(wave, i, item)
+                        elif (len(item) - 1) * (item[-1] - 1) == eff:
+                            _loop_decode(wave, i, item)
+                            rest_loop_count -= 1
+        return wave
 
 
 def hvac(host, irfile, msg):
@@ -383,7 +484,7 @@ def hvac(host, irfile, msg):
 
     try:
         irtx = IRSEND(pi, irfile)
-        rtn = irtx.send_ir(msg)
+        rtn = irtx.send_ir_command(msg)
         if irtx is not None:
             irtx.cancel()
             irtx = None
