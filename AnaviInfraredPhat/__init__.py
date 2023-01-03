@@ -46,9 +46,6 @@ class AnaviInfraredPhat:
         self._bus = bus
         self._address = address
 
-    def __del__(self):
-        self.cancel()
-
     def _write_registers(self, data):
         h = None
         try:
@@ -64,7 +61,7 @@ class AnaviInfraredPhat:
         val = None
         try:
             h = self.pi.i2c_open(self._bus, self._address)
-            val = self.pi.i2c_read_i2c_block_data(self.h, reg, count)
+            val = self.pi.i2c_read_i2c_block_data(h, reg, count)
         except Exception as e:
             logging.exception(e)
         finally:
@@ -116,27 +113,35 @@ class HTU21D(AnaviInfraredPhat):
         """
         :return: returns temperature from HTU21D sensor.
         """
+        h = None
         try:
             self._write_registers([self._TEMP])
             time.sleep(self._HTU21D_DELAY)
-            c, rt = self.pi.i2c_read_device(self.h, 2)
+            h = self.pi.i2c_open(self._bus, self._address)
+            c, rt = self.pi.i2c_read_device(h, 2)
             temp = int.from_bytes(rt, byteorder='big', signed=False) / 65536.0
             return -46.85 + (175.72 * temp)
         except Exception:
             raise AnaviInfraredPhatException("Could not get temperature from HTU21D")
+        finally:
+            self.cancel(h)
 
     def get_humidity(self):
         """
         :return: returns humidity from HTU21D sensor.
         """
+        h = None
         try:
             self._write_registers([self._HUMID])
             time.sleep(self._HTU21D_DELAY)
-            c, rh = self.pi.i2c_read_device(self.h, 2)
+            h = self.pi.i2c_open(self._bus, self._address)
+            c, rh = self.pi.i2c_read_device(h, 2)
             humid = int.from_bytes(rh, byteorder='big', signed=False) / 65536.0
             return -6.0 + (125.0 * humid)
         except Exception:
             raise AnaviInfraredPhatException("Coild not get humidity from HTU21D")
+        finally:
+            self.cancel(h)
 
 
 class BMP180(AnaviInfraredPhat):
@@ -302,7 +307,6 @@ class IRSEND(AnaviInfraredPhat):
         self.FREQ = txfreq
         self.GAP_S = gap / 1000.0
         self.records_file = records_file
-        self.h = None
 
     def carrier(self, micros):
         """
