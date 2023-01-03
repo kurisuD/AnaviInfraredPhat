@@ -6,7 +6,7 @@ with open("README.md") as fh:
 
 setuptools.setup(
     name="AnaviInfraredPhat",
-    version="0.0.6",
+    version="0.0.7",
     author="KurisuD",
     author_email="KurisuD@pypi.darnand.net",
     description="AnaviInfraredPhat",
@@ -14,7 +14,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/KurisuD/AnaviInfraredPhat",
     packages=setuptools.find_packages(),
-    install_requires=['pigpio', 'zmq', 'pap_logger'],
+    install_requires=['pigpio', 'pyzmq', 'pap_logger'],
     classifiers=[
         "Programming Language :: Python :: 3 :: Only",
         "Programming Language :: Python :: 3.5",
