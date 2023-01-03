@@ -398,6 +398,7 @@ class IRSEND(AnaviInfraredPhat):
     @staticmethod
     def _compress_wave(wave, entry_max=598):
         # Taken from https://korintje.com/archives/28. Thanks!
+        # wayback machine at https://web.archive.org/web/20200518141037/https://korintje.com/archives/28
         # Compressing a wave code if the length is more than entry_max ###
         loop_max = 20
         if len(wave) > entry_max:
