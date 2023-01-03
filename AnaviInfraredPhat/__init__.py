@@ -43,33 +43,40 @@ class AnaviInfraredPhat:
       The default I2C bus is 1 and a 0x00 address for this parent class.
       """
         self.pi = pi
-        try:
-            self.h = self.pi.i2c_open(bus, address)
-        except Exception:
-            raise AnaviInfraredPhatException("Could not obtain a handle")
+        self._bus = bus
+        self._address = address
+
+    def __del__(self):
+        self.cancel()
 
     def _write_registers(self, data):
+        h = None
         try:
-            self.pi.i2c_write_device(self.h, data)
-        except Exception as _:
-            self.cancel()
-            raise AnaviInfraredPhatException("Could not write to registers")
+            h = self.pi.i2c_open(self._bus, self._address)
+            self.pi.i2c_write_device(h, data)
+            self.cancel(h)
+        except Exception as e:
+            self.cancel(h)
+            raise AnaviInfraredPhatException(f"Could not write to registers : {e}")
 
     def _read_registers(self, reg, count):
+        h = None
+        val = None
         try:
-            return self.pi.i2c_read_i2c_block_data(self.h, reg, count)
+            h = self.pi.i2c_open(self._bus, self._address)
+            val = self.pi.i2c_read_i2c_block_data(self.h, reg, count)
         except Exception as e:
-            self.cancel()
             logging.exception(e)
-            return None
+        finally:
+            self.cancel(h)
+        return val
 
-    def cancel(self):
+    def cancel(self, h):
         """
       Cancels the sensor and releases resources.
       """
-        if self.h is not None:
-            self.pi.i2c_close(self.h)
-            self.h = None
+        if h is not None:
+            self.pi.i2c_close(h)
 
 
 class BH1750(AnaviInfraredPhat):
