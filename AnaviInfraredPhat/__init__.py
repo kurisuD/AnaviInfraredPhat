@@ -140,7 +140,7 @@ class HTU21D(AnaviInfraredPhat):
             humid = int.from_bytes(rh, byteorder='big', signed=False) / 65536.0
             return -6.0 + (125.0 * humid)
         except Exception:
-            raise AnaviInfraredPhatException("Coild not get humidity from HTU21D")
+            raise AnaviInfraredPhatException("Could not get humidity from HTU21D")
         finally:
             self.cancel(h)
 
